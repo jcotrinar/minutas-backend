@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import contratos, lotes, distritos, minutas
+from app.database import engine
+from app import models
+
+# Crear tablas automáticamente si no existen en Supabase
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Minutas API",
