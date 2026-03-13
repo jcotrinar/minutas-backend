@@ -76,7 +76,27 @@ def numero_a_letras(monto: float) -> str:
     parte_entera  = _convertir_entero(entero).upper()
     parte_decimal = f"{decimal:02d}/100"
 
-    return f"{parte_entera} CON {parte_decimal} SOLES"
+    return f"{parte_entera} Y {parte_decimal} SOLES"
+
+
+def area_a_letras(area: float) -> str:
+    """
+    Convierte un área a letras con decimales en palabras.
+    Ej: 256.85 → 'DOSCIENTOS CINCUENTA Y SEIS PUNTO OCHO CINCO'
+    Ej: 200.00 → 'DOSCIENTOS'
+    """
+    area = round(area, 2)
+    entero  = int(area)
+    decimal = round((area - entero) * 100)
+
+    resultado = _convertir_entero(entero).upper()
+
+    if decimal > 0:
+        dec_str = f"{decimal:02d}"
+        digitos = [_convertir_entero(int(d)).upper() for d in dec_str]
+        resultado += " PUNTO " + " ".join(digitos)
+
+    return resultado
 
 
 # ─── FECHAS EN ESPAÑOL ────────────────────────────────────────────────────────
@@ -181,6 +201,28 @@ def porcentaje_texto(pct: float) -> str:
     return f"{pct * 100:.4f}"
 
 
+
+# ─── MAPA PARTIDA → DESCRIPCIÓN DEL PREDIO MATRIZ ───────────────────────────
+
+PREDIO_POR_PARTIDA = {
+    "04020673": "PREDIO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. N° 1866",
+    "11578607": "PREDIO MOCAN Y ANEXOS, PARCELA N° 1891",
+    "04019384": "PREDIO RURAL VALLE CHICAMA FUNDO MOCAN, SECTOR LA ARENITA CON U.C. 1853",
+    "04019387": "PREDIO RURAL VALLE CHICAMA FUNDO MOCAN, SECTOR LA ARENITA CON U.C. 1854",
+    "04019390": "PREDIO MOCAN SECTOR LA ARENITA, PARCELA 1855, CON U.C. 1855",
+    "04019385": "PREDIO FUNDO MOCAN-SECTOR LA ARENITA PARCELA 1856, CON U.C. 1856",
+    "04017223": "PREDIO FUNDO MOCAN-SECTOR LA ARENITA, CON U.C. 1857",
+    "04017224": "PREDIO FUNDO MOCAN-SECTOR LA ARENITA PARCELA, CON U.C. 1858",
+    "11578604": "PREDIO MOCAN Y ANEXOS, PARCELA N° 1859",
+    "04020058": "FUNDO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. 1865",
+}
+
+
+def descripcion_predio(partida: str) -> str:
+    """Retorna la descripción del predio matriz según la partida del lote."""
+    return PREDIO_POR_PARTIDA.get(str(partida or ""), f"PARTIDA N° {partida}")
+
+
 # ─── COMPILADOR DE VARIABLES ─────────────────────────────────────────────────
 
 def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
@@ -233,7 +275,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "_ATOTAL_TEXTO":       numero_a_letras(area_total),
         "AREA (m2)":           str(area_m2),
         "_AREA":               f"{area_m2:.2f}",
-        "_AREA_TEXTO":         numero_a_letras(area_m2),
+        "_AREA_TEXTO":         area_a_letras(area_m2),
         "%":                   str(pct),
         "_PORCENTAJE":         porcentaje_texto(pct),
         "_PORCENT_TEXTO":      f"{porcentaje_texto(pct)} POR CIENTO",
@@ -309,7 +351,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "PLAZOEP_TEXTO":       plazo_a_texto(plazo_meses) if plazo_meses else "",
 
         # Datos del lote (DATOSLOTE: "MZ-LT, área has, partida, UC")
-        "DATOSLOTE":           f"{lote.mz_lt}, {area_total} HAS, PARTIDA N° {lote.partida or ''}, UC {lote.uc or ''}",
+        "DATOSLOTE":           descripcion_predio(lote.partida),
     }
 
     return vars_dict
