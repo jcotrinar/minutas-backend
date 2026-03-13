@@ -1,0 +1,28 @@
+# Entorno y secretos — NUNCA subir
+.env
+*.env
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+env/
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Minutas generadas localmente
+minutas_generadas/
+
+# IDEs
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
