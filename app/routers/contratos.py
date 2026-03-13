@@ -1,94 +1,68 @@
+"""routers/contratos.py"""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app import models, schemas
+from app.models import Contrato
+from app.schemas import ContratoCreate, ContratoUpdate, ContratoOut
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[schemas.ContratoOut])
-def listar_contratos(
-    estado:   Optional[str] = Query(None, description="VERDE/AMARILLO/AZUL/ROJO"),
-    busqueda: Optional[str] = Query(None, description="Nombre del titular"),
-    skip: int = 0,
-    limit: int = 100,
+@router.get("/", response_model=List[ContratoOut])
+def listar(
+    proyecto_id: Optional[int] = None,
+    estado:      Optional[str] = None,
+    busqueda:    Optional[str] = None,
+    skip: int = 0, limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Lista contratos con filtros opcionales. Incluye saldo y estado calculados."""
-    query = db.query(models.Contrato)
-
+    q = db.query(Contrato)
+    if proyecto_id:
+        q = q.filter(Contrato.proyecto_id == proyecto_id)
     if busqueda:
-        query = query.filter(
-            models.Contrato.titular.ilike(f"%{busqueda}%")
-        )
-
-    contratos = query.offset(skip).limit(limit).all()
-
-    # Filtrar por estado (se calcula en Python, no en SQL)
+        q = q.filter(Contrato.titular.ilike(f"%{busqueda}%"))
+    contratos = q.order_by(Contrato.numero.desc()).offset(skip).limit(limit).all()
     if estado:
-        contratos = [c for c in contratos if c.estado == estado.upper()]
-
+        contratos = [c for c in contratos if c.estado == estado]
     return contratos
 
 
-@router.get("/{contrato_id}", response_model=schemas.ContratoOut)
-def obtener_contrato(contrato_id: int, db: Session = Depends(get_db)):
-    contrato = db.query(models.Contrato).filter(
-        models.Contrato.id == contrato_id
-    ).first()
-    if not contrato:
-        raise HTTPException(status_code=404, detail="Contrato no encontrado")
-    return contrato
+@router.get("/{id}", response_model=ContratoOut)
+def obtener(id: int, db: Session = Depends(get_db)):
+    c = db.query(Contrato).filter(Contrato.id == id).first()
+    if not c:
+        raise HTTPException(404, "Contrato no encontrado")
+    return c
 
 
-@router.post("/", response_model=schemas.ContratoOut, status_code=201)
-def crear_contrato(data: schemas.ContratoCreate, db: Session = Depends(get_db)):
-    # Verificar que el número no exista
-    existe = db.query(models.Contrato).filter(
-        models.Contrato.numero == data.numero
-    ).first()
-    if existe:
-        raise HTTPException(status_code=400, detail=f"Ya existe el contrato N° {data.numero}")
-
-    # Verificar que el lote exista
-    lote = db.query(models.Lote).filter(models.Lote.id == data.lote_id).first()
-    if not lote:
-        raise HTTPException(status_code=404, detail="Lote no encontrado")
-
-    contrato = models.Contrato(**data.model_dump())
-    db.add(contrato)
+@router.post("/", response_model=ContratoOut, status_code=201)
+def crear(data: ContratoCreate, db: Session = Depends(get_db)):
+    if db.query(Contrato).filter(Contrato.numero == data.numero).first():
+        raise HTTPException(400, f"Ya existe el contrato número {data.numero}")
+    c = Contrato(**data.model_dump())
+    db.add(c)
     db.commit()
-    db.refresh(contrato)
-    return contrato
+    db.refresh(c)
+    return c
 
 
-@router.put("/{contrato_id}", response_model=schemas.ContratoOut)
-def actualizar_contrato(
-    contrato_id: int,
-    data: schemas.ContratoUpdate,
-    db: Session = Depends(get_db)
-):
-    contrato = db.query(models.Contrato).filter(
-        models.Contrato.id == contrato_id
-    ).first()
-    if not contrato:
-        raise HTTPException(status_code=404, detail="Contrato no encontrado")
-
-    for campo, valor in data.model_dump(exclude_unset=True).items():
-        setattr(contrato, campo, valor)
-
+@router.put("/{id}", response_model=ContratoOut)
+def actualizar(id: int, data: ContratoUpdate, db: Session = Depends(get_db)):
+    c = db.query(Contrato).filter(Contrato.id == id).first()
+    if not c:
+        raise HTTPException(404, "Contrato no encontrado")
+    for k, v in data.model_dump(exclude_none=True).items():
+        setattr(c, k, v)
     db.commit()
-    db.refresh(contrato)
-    return contrato
+    db.refresh(c)
+    return c
 
 
-@router.delete("/{contrato_id}", status_code=204)
-def eliminar_contrato(contrato_id: int, db: Session = Depends(get_db)):
-    contrato = db.query(models.Contrato).filter(
-        models.Contrato.id == contrato_id
-    ).first()
-    if not contrato:
-        raise HTTPException(status_code=404, detail="Contrato no encontrado")
-    db.delete(contrato)
+@router.delete("/{id}", status_code=204)
+def eliminar(id: int, db: Session = Depends(get_db)):
+    c = db.query(Contrato).filter(Contrato.id == id).first()
+    if not c:
+        raise HTTPException(404, "Contrato no encontrado")
+    db.delete(c)
     db.commit()

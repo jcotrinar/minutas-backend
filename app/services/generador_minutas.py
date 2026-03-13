@@ -1,161 +1,104 @@
 """
-generador_minutas.py
-Reemplaza los marcadores «VARIABLE» en los templates Word.
-Equivalente al Módulo1 (contratos) del VBA original.
+generador_minutas.py — Genera minutas Word reemplazando marcadores «VARIABLE».
+Universal para todos los proyectos. Trabaja directo en XML para preservar formato.
 """
-
 import os
 import re
-import copy
+import zipfile
+import shutil
 from pathlib import Path
-from datetime import date
-from docx import Document
-from docx.oxml.ns import qn
 from lxml import etree
+
 from app.services.calculos import compilar_variables
 
 TEMPLATES_DIR = Path(os.getenv("TEMPLATES_DIR", "app/templates"))
-OUTPUT_DIR    = Path(os.getenv("OUTPUT_DIR", "minutas_generadas"))
+OUTPUT_DIR    = Path(os.getenv("OUTPUT_DIR",    "minutas_generadas"))
 
-COLORES_TEMPLATE = {
-    "VERDE":    "VERDE.docx",
-    "AMARILLO": "AMARILLO.docx",
-    "AZUL":     "AZUL.docx",
-    "ROJO":     "ROJO.docx",
-}
-
-# Normaliza la clave del marcador: quita espacios internos y strips
-def _norm(clave: str) -> str:
-    return clave.strip()
-
-def _build_lookup(variables: dict) -> dict:
-    """Crea un dict con claves normalizadas para tolerar espacios en los marcadores."""
-    return {_norm(k): v for k, v in variables.items()}
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-def _reemplazar_en_parrafo(parrafo, lookup: dict):
-    """
-    Reemplaza marcadores «VARIABLE» preservando el formato (negrita, tamaño, etc.)
-    de cada run individual.
-    
-    Estrategia:
-    1. Reconstruir el texto completo del párrafo detectando posición de cada run.
-    2. Por cada marcador encontrado, reemplazar directamente en el run que lo contiene
-       (o en el primer run del span si está partido entre varios).
-    3. Preservar rPr (formato) de todos los runs.
-    """
-    # Texto completo
-    texto = "".join(r.text for r in parrafo.runs)
-    patron = re.compile(r"«([^»]+)»")
-    
-    if not patron.search(texto):
-        return  # Sin marcadores
+def _texto_runs(runs):
+    return "".join(
+        "".join(t.text or "" for t in r.findall(f"{{{W}}}t"))
+        for r in runs
+    )
 
-    # Reconstruir texto run por run con sus posiciones
-    runs = parrafo.runs
-    if not runs:
-        return
 
-    # Índice de inicio de cada run dentro del texto completo
-    posiciones = []
-    pos = 0
-    for r in runs:
-        posiciones.append(pos)
-        pos += len(r.text)
+def _reemplazar_xml(xml_bytes: bytes, variables: dict) -> bytes:
+    patron = re.compile(r"«([^»]*)»")
+    root   = etree.fromstring(xml_bytes)
 
-    # Para cada marcador, encontrar en qué runs cae y reemplazar
-    # Procesamos de atrás hacia adelante para no desplazar índices
-    matches = list(patron.finditer(texto))
-    for match in reversed(matches):
-        clave = _norm(match.group(1))
-        valor = lookup.get(clave, match.group(0))
-        start, end = match.start(), match.end()
-
-        # Encontrar runs que cubren [start, end)
-        runs_span = []
-        for i, r in enumerate(runs):
-            r_start = posiciones[i]
-            r_end   = r_start + len(r.text)
-            if r_end > start and r_start < end:
-                runs_span.append(i)
-
-        if not runs_span:
+    for parrafo in root.iter(f"{{{W}}}p"):
+        runs = parrafo.findall(f".//{{{W}}}r")
+        if not runs:
+            continue
+        texto = _texto_runs(runs)
+        if "«" not in texto:
             continue
 
-        first_i = runs_span[0]
-        last_i  = runs_span[-1]
+        def reemplazar(m):
+            return str(variables.get(m.group(1), ""))
 
-        # Calcular texto antes y después del marcador dentro del primer y último run
-        r_first = runs[first_i]
-        r_last  = runs[last_i]
+        texto_nuevo = patron.sub(reemplazar, texto)
 
-        before = r_first.text[: start - posiciones[first_i]]
-        after  = r_last.text[end - posiciones[last_i] :]
+        # Poner texto en el primer run que tenía «, vaciar el resto
+        run_destino = next((r for r in runs if "«" in _texto_runs([r])), runs[0])
 
-        # Poner valor en el primer run
-        r_first.text = before + valor + after
+        for t in run_destino.findall(f"{{{W}}}t"):
+            run_destino.remove(t)
 
-        # Vaciar runs intermedios y el último si es distinto al primero
-        for i in runs_span[1:]:
-            runs[i].text = ""
+        nuevo_t = etree.SubElement(run_destino, f"{{{W}}}t")
+        nuevo_t.text = texto_nuevo
+        if texto_nuevo and (texto_nuevo[0] == " " or texto_nuevo[-1] == " "):
+            nuevo_t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
 
-        # Actualizar posiciones (simplificado: recalcular desde cero)
-        texto = "".join(r.text for r in runs)
-        pos = 0
-        for i, r in enumerate(runs):
-            posiciones[i] = pos
-            pos += len(r.text)
+        for r in runs:
+            if r is run_destino:
+                continue
+            if _texto_runs([r]):
+                for t in r.findall(f"{{{W}}}t"):
+                    r.remove(t)
 
-
-def _reemplazar_en_tabla(tabla, lookup: dict):
-    for fila in tabla.rows:
-        for celda in fila.cells:
-            for parrafo in celda.paragraphs:
-                _reemplazar_en_parrafo(parrafo, lookup)
-            for subtabla in celda.tables:
-                _reemplazar_en_tabla(subtabla, lookup)
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
-def generar_minuta(contrato, lote, distrito1=None, distrito2=None) -> Path:
-    estado = contrato.estado
-    template_nombre = COLORES_TEMPLATE.get(estado)
-
-    if not template_nombre:
-        raise ValueError(f"Estado desconocido: {estado}")
-
-    template_path = TEMPLATES_DIR / template_nombre
+def generar_minuta(contrato, lote, template: "Template", distrito1=None, distrito2=None) -> Path:
+    """
+    Genera el .docx para el contrato dado usando el template indicado.
+    Retorna la ruta del archivo generado.
+    """
+    template_path = TEMPLATES_DIR / template.ruta
     if not template_path.exists():
-        raise FileNotFoundError(
-            f"Template no encontrado: {template_path}\n"
-            f"Asegúrate de copiar los 4 archivos .docx a: {TEMPLATES_DIR}"
-        )
+        raise FileNotFoundError(f"Template no encontrado: {template_path}")
 
     variables = compilar_variables(contrato, lote, distrito1, distrito2)
-    lookup    = _build_lookup(variables)
 
-    doc = Document(str(template_path))
-
-    for parrafo in doc.paragraphs:
-        _reemplazar_en_parrafo(parrafo, lookup)
-
-    for tabla in doc.tables:
-        _reemplazar_en_tabla(tabla, lookup)
-
-    for seccion in doc.sections:
-        for parrafo in seccion.header.paragraphs:
-            _reemplazar_en_parrafo(parrafo, lookup)
-        for parrafo in seccion.footer.paragraphs:
-            _reemplazar_en_parrafo(parrafo, lookup)
-
-    fecha       = contrato.fecha
-    año         = str(fecha.year)
-    mes         = f"{fecha.month:02d}"
-    nombre_arch = f"MINUTA_{contrato.numero:04d}_{estado}_{fecha.strftime('%Y%m%d')}.docx"
-
-    carpeta_salida = OUTPUT_DIR / año / mes
+    # Ruta de salida
+    fecha          = contrato.fecha
+    nombre_arch    = f"MINUTA_{contrato.numero:04d}_{template.color.value}_{fecha.strftime('%Y%m%d')}.docx"
+    carpeta_salida = OUTPUT_DIR / str(fecha.year) / f"{fecha.month:02d}"
     carpeta_salida.mkdir(parents=True, exist_ok=True)
+    ruta_salida    = carpeta_salida / nombre_arch
 
-    ruta_salida = carpeta_salida / nombre_arch
-    doc.save(str(ruta_salida))
+    # Leer ZIP, procesar XMLs, reescribir
+    with zipfile.ZipFile(str(template_path), "r") as zin:
+        archivos = {n: zin.read(n) for n in zin.namelist()}
+
+    xml_targets = ["word/document.xml", "word/header1.xml", "word/header2.xml",
+                   "word/footer1.xml",  "word/footer2.xml"]
+
+    for target in xml_targets:
+        if target in archivos:
+            try:
+                archivos[target] = _reemplazar_xml(archivos[target], variables)
+            except Exception:
+                pass
+
+    import tempfile
+    tmp = str(ruta_salida) + ".tmp"
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+        for nombre, data in archivos.items():
+            zout.writestr(nombre, data)
+    Path(tmp).replace(ruta_salida)
 
     return ruta_salida

@@ -1,103 +1,138 @@
-from pydantic import BaseModel, Field, validator
+"""schemas.py — Modelos de entrada/salida de la API."""
+from pydantic import BaseModel
 from typing import Optional
 from datetime import date, datetime
+from app.models import Moneda, ColorSemaforo
 
 
-# ─── LOTE ────────────────────────────────────────────────────────────────────
+# ─── PROYECTOS ────────────────────────────────────────────────────────────────
 
-class LoteBase(BaseModel):
-    manzana: str
-    numero:  int
-    area:    float
-    uc:      Optional[int]    = None
-    partida: Optional[str]   = None
-    has:     Optional[float] = None
-
-class LoteCreate(LoteBase):
-    pass
-
-class LoteOut(LoteBase):
-    id:    int
-    mz_lt: Optional[str] = None
-    class Config:
-        from_attributes = True
+class ProyectoOut(BaseModel):
+    id:          int
+    nombre:      str
+    moneda:      Moneda
+    activo:      bool
+    class Config: from_attributes = True
 
 
-# ─── DISTRITO ─────────────────────────────────────────────────────────────────
+# ─── LOTES ────────────────────────────────────────────────────────────────────
+
+class LoteOut(BaseModel):
+    id:            int
+    proyecto_id:   int
+    manzana:       str
+    numero:        str
+    area:          float
+    partida:       Optional[str]
+    nombre_predio: Optional[str]
+    class Config: from_attributes = True
+
+
+# ─── DISTRITOS ────────────────────────────────────────────────────────────────
 
 class DistritoOut(BaseModel):
     id:        int
     region:    str
     provincia: str
     distrito:  str
-    class Config:
-        from_attributes = True
+    class Config: from_attributes = True
 
 
-# ─── CONTRATO ─────────────────────────────────────────────────────────────────
+# ─── CONTRATOS ────────────────────────────────────────────────────────────────
 
-class ContratoBase(BaseModel):
+class ContratoCreate(BaseModel):
     numero:        int
+    proyecto_id:   int
     lote_id:       int
-    precio:        float
-    separacion:    float = 0.0
-    pago:          float = 0.0
     fecha:         date
-    f_separacion:  Optional[date] = None
-    f_pago_total:  Optional[date] = None
 
     # Titular
     titular:       str
-    ocupacion1:    Optional[str] = None
-    genero1:       Optional[str] = Field(None, pattern="^[MF]$")
-    estado_civil1: Optional[str] = Field(None, pattern="^[SCDV]$")
-    dni:           Optional[str] = None
-    direccion1:    Optional[str] = None
-    distrito1_id:  Optional[int] = None
+    dni:           Optional[str]
+    ocupacion1:    Optional[str]
+    genero1:       Optional[str]
+    estado_civil1: Optional[str]
+    distrito1_id:  Optional[int]
+    direccion1:    Optional[str]
 
     # Copropietario
-    copropietario:  Optional[str] = None
-    ocupacion2:     Optional[str] = None
-    genero2:        Optional[str] = Field(None, pattern="^[MF]$")
-    estado_civil2:  Optional[str] = Field(None, pattern="^[SCDV]$")
-    dni2:           Optional[str] = None
-    direccion2:     Optional[str] = None
-    distrito2_id:   Optional[int] = None
+    copropietario: Optional[str]
+    dni2:          Optional[str]
+    ocupacion2:    Optional[str]
+    genero2:       Optional[str]
+    estado_civil2: Optional[str]
+    distrito2_id:  Optional[int]
+    direccion2:    Optional[str]
 
-class ContratoCreate(ContratoBase):
-    pass
+    # Económico
+    moneda:        Moneda
+    precio:        float
+    separacion:    float = 0.0
+    sep_en_soles:  Optional[float]
+    tipo_cambio:   Optional[float]
+    pago:          float = 0.0
+
+    # Plazo
+    f_pago_total:  Optional[date]
+    plazo_meses:   Optional[int]
+
 
 class ContratoUpdate(BaseModel):
-    precio:        Optional[float] = None
-    separacion:    Optional[float] = None
-    pago:          Optional[float] = None
-    f_pago_total:  Optional[date]  = None
-    copropietario: Optional[str]   = None
-    # (agrega más campos según necesites actualizar)
+    fecha:         Optional[date]
+    titular:       Optional[str]
+    dni:           Optional[str]
+    ocupacion1:    Optional[str]
+    genero1:       Optional[str]
+    estado_civil1: Optional[str]
+    distrito1_id:  Optional[int]
+    direccion1:    Optional[str]
+    copropietario: Optional[str]
+    dni2:          Optional[str]
+    ocupacion2:    Optional[str]
+    genero2:       Optional[str]
+    estado_civil2: Optional[str]
+    distrito2_id:  Optional[int]
+    direccion2:    Optional[str]
+    moneda:        Optional[Moneda]
+    precio:        Optional[float]
+    separacion:    Optional[float]
+    sep_en_soles:  Optional[float]
+    tipo_cambio:   Optional[float]
+    pago:          Optional[float]
+    f_pago_total:  Optional[date]
+    plazo_meses:   Optional[int]
 
-class ContratoOut(ContratoBase):
+
+class LoteResumen(BaseModel):
+    manzana: str
+    numero:  str
+    area:    float
+    class Config: from_attributes = True
+
+
+class ContratoOut(BaseModel):
     id:            int
+    numero:        int
+    proyecto_id:   int
+    lote_id:       int
+    fecha:         date
+    titular:       str
+    dni:           Optional[str]
+    ocupacion1:    Optional[str]
+    genero1:       Optional[str]
+    estado_civil1: Optional[str]
+    direccion1:    Optional[str]
+    copropietario: Optional[str]
+    moneda:        Moneda
+    precio:        float
+    separacion:    float
+    sep_en_soles:  Optional[float]
+    tipo_cambio:   Optional[float]
+    pago:          float
+    f_pago_total:  Optional[date]
+    plazo_meses:   Optional[int]
     saldo:         float
-    estado:        str          # VERDE / AMARILLO / AZUL / ROJO
-    creado_en:     Optional[datetime] = None
-    sincronizado:  bool
-    lote:          Optional[LoteOut]      = None
-    distrito1:     Optional[DistritoOut] = None
-    distrito2:     Optional[DistritoOut] = None
-
-    class Config:
-        from_attributes = True
-
-
-# ─── MINUTA ──────────────────────────────────────────────────────────────────
-
-class MinutaRequest(BaseModel):
-    contrato_id:   int
-    subir_a_drive: bool = True   # Si False, solo devuelve el archivo sin subir
-
-class MinutaResponse(BaseModel):
-    contrato_id:   int
     estado:        str
-    archivo_local: str           # Ruta en el servidor
-    drive_url:     Optional[str] = None   # URL del archivo en Drive (si se subió)
-    nombre:        str           # Nombre del archivo generado
+    creado_en:     Optional[datetime]
+    lote:          Optional[LoteResumen]
+    class Config: from_attributes = True

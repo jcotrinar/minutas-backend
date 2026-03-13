@@ -1,25 +1,25 @@
+"""routers/lotes.py"""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
-from app import models, schemas
-
-# ─── LOTES ───────────────────────────────────────────────────────────────────
+from app.models import Lote
+from app.schemas import LoteOut
 
 router = APIRouter()
 
-@router.get("/", response_model=List[schemas.LoteOut])
-def listar_lotes(
-    manzana: Optional[str] = Query(None),
+@router.get("/", response_model=List[LoteOut])
+def listar(
+    proyecto_id: int,
+    manzana: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(models.Lote)
+    q = db.query(Lote).filter(Lote.proyecto_id == proyecto_id)
     if manzana:
-        query = query.filter(models.Lote.manzana == manzana.upper())
-    return query.order_by(models.Lote.manzana, models.Lote.numero).all()
+        q = q.filter(Lote.manzana == manzana)
+    return q.order_by(Lote.manzana, Lote.numero).all()
 
-@router.get("/manzanas", response_model=List[str])
-def listar_manzanas(db: Session = Depends(get_db)):
-    """Lista de manzanas únicas, para el ComboBox de la app."""
-    resultado = db.query(models.Lote.manzana).distinct().order_by(models.Lote.manzana).all()
-    return [r[0] for r in resultado]
+@router.get("/manzanas")
+def manzanas(proyecto_id: int, db: Session = Depends(get_db)):
+    rows = db.query(Lote.manzana).filter(Lote.proyecto_id == proyecto_id).distinct().order_by(Lote.manzana).all()
+    return [r[0] for r in rows]
