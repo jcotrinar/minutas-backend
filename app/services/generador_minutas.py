@@ -2,10 +2,11 @@
 generador_minutas.py — Genera minutas Word reemplazando marcadores «VARIABLE».
 Universal para todos los proyectos. Trabaja directo en XML para preservar formato.
 
-Fix v2:
+Fix v3:
+- Preserva negrita y cualquier formato (rPr) de cada segmento del párrafo
+- Texto entre marcadores mantiene el rPr del run original que lo contenía
+- El valor reemplazado hereda el rPr del run que contenía el «marcador»
 - Marcadores partidos en múltiples runs se unen correctamente
-- El texto reemplazado hereda el formato (rPr) del primer run que contenía «
-- No propaga negrita ni estilos de runs vacíos o adyacentes
 """
 import os
 import re
@@ -32,18 +33,20 @@ def _parrafo_text(runs) -> str:
 
 
 def _get_rpr(run):
-    return run.find(f"{{{W}}}rPr")
+    rpr = run.find(f"{{{W}}}rPr")
+    return deepcopy(rpr) if rpr is not None else None
 
 
-def _limpiar_rpr_negrita(rpr):
-    """Elimina w:b y w:bCs para no propagar negrita del marcador al valor."""
-    if rpr is None:
-        return None
-    rpr = deepcopy(rpr)
-    for tag in [f"{{{W}}}b", f"{{{W}}}bCs"]:
-        for elem in rpr.findall(tag):
-            rpr.remove(elem)
-    return rpr
+def _make_run(texto: str, rpr) -> etree.Element:
+    """Crea un <w:r> con el texto y formato dados."""
+    run = etree.Element(f"{{{W}}}r")
+    if rpr is not None:
+        run.append(deepcopy(rpr))
+    t = etree.SubElement(run, f"{{{W}}}t")
+    t.text = texto
+    if texto and (texto[0] == " " or texto[-1] == " "):
+        t.set(f"{{{XML}}}space", "preserve")
+    return run
 
 
 def _reemplazar_parrafo(parrafo, variables: dict):
@@ -57,41 +60,90 @@ def _reemplazar_parrafo(parrafo, variables: dict):
     if "«" not in texto_completo:
         return
 
-    # rPr del primer run que contiene «
-    rpr_base = None
-    for r in runs:
-        if "«" in _run_text(r):
-            rpr_base = _get_rpr(r)
-            break
-    rpr_limpio = _limpiar_rpr_negrita(rpr_base)
+    # ── Construir mapa de posición → rPr ──────────────────────────────────────
+    # Para cada posición del texto completo, guardamos el rPr del run original.
+    # Esto nos permite saber qué formato aplicar a cada carácter.
+    pos_rpr = []
+    for run in runs:
+        rpr = _get_rpr(run)
+        for _ in _run_text(run):
+            pos_rpr.append(rpr)
 
-    # Reemplazar marcadores
-    def reemplazar(m):
-        clave = m.group(1)
-        return str(variables.get(clave, f"«{clave}»"))
+    # ── Construir lista de segmentos (texto, rpr) ─────────────────────────────
+    # Dividimos el texto completo en segmentos respetando los marcadores.
+    # Cada segmento tendrá el rPr correspondiente a su posición original.
+    segmentos = []  # lista de (texto_final, rpr)
 
-    texto_nuevo = patron.sub(reemplazar, texto_completo)
+    cursor = 0
+    for match in patron.finditer(texto_completo):
+        inicio, fin = match.start(), match.end()
 
-    # Eliminar todos los runs del párrafo
+        # Texto antes del marcador — preservar rPr carácter a carácter
+        if cursor < inicio:
+            _agregar_segmentos_con_formato(segmentos, texto_completo[cursor:inicio], pos_rpr[cursor:inicio])
+
+        # Valor del marcador — hereda el rPr del «
+        clave = match.group(1)
+        valor = str(variables.get(clave, f"«{clave}»"))
+        rpr_marcador = pos_rpr[inicio] if inicio < len(pos_rpr) else None
+        if valor:
+            segmentos.append((valor, rpr_marcador))
+
+        cursor = fin
+
+    # Texto después del último marcador
+    if cursor < len(texto_completo):
+        _agregar_segmentos_con_formato(segmentos, texto_completo[cursor:], pos_rpr[cursor:])
+
+    # ── Eliminar runs originales del párrafo ──────────────────────────────────
     for r in parrafo.findall(f"{{{W}}}r"):
         parrafo.remove(r)
     for hlink in parrafo.findall(f".//{{{W}}}hyperlink"):
         for r in hlink.findall(f"{{{W}}}r"):
             hlink.remove(r)
 
-    # Insertar run único después de pPr
+    # ── Insertar nuevos runs después de pPr ───────────────────────────────────
     pPr = parrafo.find(f"{{{W}}}pPr")
     insert_pos = (list(parrafo).index(pPr) + 1) if pPr is not None else 0
 
-    nuevo_run = etree.Element(f"{{{W}}}r")
-    if rpr_limpio is not None:
-        nuevo_run.append(rpr_limpio)
-    t = etree.SubElement(nuevo_run, f"{{{W}}}t")
-    t.text = texto_nuevo
-    if texto_nuevo and (texto_nuevo[0] == " " or texto_nuevo[-1] == " "):
-        t.set(f"{{{XML}}}space", "preserve")
+    for i, (texto, rpr) in enumerate(segmentos):
+        if texto:
+            parrafo.insert(insert_pos + i, _make_run(texto, rpr))
 
-    parrafo.insert(insert_pos, nuevo_run)
+
+def _agregar_segmentos_con_formato(segmentos: list, texto: str, pos_rpr: list):
+    """
+    Agrupa caracteres consecutivos con el mismo rPr en un solo segmento.
+    Así no creamos un run por cada carácter, sino uno por cada bloque de formato igual.
+    """
+    if not texto:
+        return
+
+    rpr_actual = pos_rpr[0] if pos_rpr else None
+    buf = ""
+
+    for i, char in enumerate(texto):
+        rpr_char = pos_rpr[i] if i < len(pos_rpr) else None
+        # Comparamos el XML serializado para detectar cambio de formato
+        if _rpr_igual(rpr_char, rpr_actual):
+            buf += char
+        else:
+            if buf:
+                segmentos.append((buf, rpr_actual))
+            buf = char
+            rpr_actual = rpr_char
+
+    if buf:
+        segmentos.append((buf, rpr_actual))
+
+
+def _rpr_igual(a, b) -> bool:
+    """Compara dos rPr por su XML serializado."""
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    return etree.tostring(a) == etree.tostring(b)
 
 
 def _reemplazar_xml(xml_bytes: bytes, variables: dict) -> bytes:
