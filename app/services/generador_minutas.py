@@ -156,6 +156,11 @@ def _reemplazar_xml(xml_bytes: bytes, variables: dict) -> bytes:
     return etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
+def _sanitizar(texto: str) -> str:
+    """Elimina caracteres inválidos para nombres de archivo."""
+    return re.sub(r'[\\/*?:"<>|]', "", texto).strip()
+
+
 def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> Path:
     template_path = TEMPLATES_DIR / template.ruta
     if not template_path.exists():
@@ -163,11 +168,17 @@ def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> 
 
     variables = compilar_variables(contrato, lote, distrito1, distrito2)
 
-    fecha          = contrato.fecha
-    nombre_arch    = f"MINUTA_{contrato.numero:04d}_{template.color.value}_{fecha.strftime('%Y%m%d')}.docx"
+    fecha = contrato.fecha
+
+    # Nombre: MZA-LT3_Proyecto_2026-03-13.docx
+    manzana       = _sanitizar(lote.manzana)
+    lote_num      = _sanitizar(lote.numero)
+    proyecto_nom  = _sanitizar(contrato.proyecto.nombre) if contrato.proyecto else "Proyecto"
+    nombre_arch   = f"{manzana}-{lote_num}, {proyecto_nom}.docx"
+
     carpeta_salida = OUTPUT_DIR / str(fecha.year) / f"{fecha.month:02d}"
     carpeta_salida.mkdir(parents=True, exist_ok=True)
-    ruta_salida    = carpeta_salida / nombre_arch
+    ruta_salida = carpeta_salida / nombre_arch
 
     with zipfile.ZipFile(str(template_path), "r") as zin:
         archivos = {n: zin.read(n) for n in zin.namelist()}
@@ -189,5 +200,15 @@ def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> 
         for nombre, data in archivos.items():
             zout.writestr(nombre, data)
     Path(tmp).replace(ruta_salida)
+
+    # ── Subir a Drive (no bloquea si falla) ───────────────────────────────────
+    try:
+        from app.services.drive_service import subir_a_drive
+        proyecto_nombre = contrato.proyecto.nombre if contrato.proyecto else "Proyecto"
+        subir_a_drive(ruta_salida, proyecto_nombre, fecha)
+    except Exception as e:
+        # El archivo local igual se retorna aunque Drive falle
+        import logging
+        logging.getLogger(__name__).warning(f"Drive upload falló: {e}")
 
     return ruta_salida
