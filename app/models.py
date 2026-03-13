@@ -3,12 +3,15 @@ models.py — Modelos de base de datos simplificados.
 4 tablas reales + distritos para autocompletar ubigeo.
 """
 from sqlalchemy import Column, Integer, String, Float, Date, Boolean, ForeignKey, Enum, Text
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import DeclarativeBase  # ✅ API moderna SQLAlchemy 2.x
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
 import enum
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
 class Moneda(str, enum.Enum):
@@ -27,12 +30,16 @@ class Proyecto(Base):
     __tablename__ = "proyectos"
 
     id          = Column(Integer, primary_key=True)
-    nombre      = Column(String(100), nullable=False)       # "Sol y Luna Malabrigo"
+    nombre      = Column(String(100), nullable=False)
     descripcion = Column(String(200))
-    moneda      = Column(Enum(Moneda), default=Moneda.SOLES)  # moneda principal del proyecto
+    moneda      = Column(Enum(Moneda), default=Moneda.SOLES)
     activo      = Column(Boolean, default=True)
 
-    fecha_limite_entrega = Column(Date, nullable=True)  # Para calcular plazo dinámico de entrega
+    fecha_limite_entrega = Column(Date, nullable=True)
+
+    # Configuración global de entrega del lote para todos los contratos del proyecto
+    entrega       = Column(String(50),  nullable=True)   # ej: "INMEDIATA", "AL_FINALIZAR_HABILITACION", "FECHA_ESPECIFICA"
+    entrega_texto = Column(String(500), nullable=True)   # texto que se inserta en «ENTREGA_TEXTO»
 
     lotes      = relationship("Lote",     back_populates="proyecto")
     contratos  = relationship("Contrato", back_populates="proyecto")
@@ -42,13 +49,13 @@ class Proyecto(Base):
 class Lote(Base):
     __tablename__ = "lotes"
 
-    id           = Column(Integer, primary_key=True)
-    proyecto_id  = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
-    manzana      = Column(String(10), nullable=False)
-    numero       = Column(String(10), nullable=False)
-    area         = Column(Float, nullable=False)
-    partida      = Column(String(20))
-    nombre_predio = Column(String(300))   # Descripción del predio matriz para esta partida
+    id            = Column(Integer, primary_key=True)
+    proyecto_id   = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    manzana       = Column(String(10), nullable=False)
+    numero        = Column(String(10), nullable=False)
+    area          = Column(Float, nullable=False)
+    partida       = Column(String(20))
+    nombre_predio = Column(String(300))
 
     proyecto  = relationship("Proyecto", back_populates="lotes")
     contratos = relationship("Contrato", back_populates="lote")
@@ -76,8 +83,8 @@ class Contrato(Base):
     titular       = Column(String(200), nullable=False)
     dni           = Column(String(15))
     ocupacion1    = Column(String(100))
-    genero1       = Column(String(1))        # M / F
-    estado_civil1 = Column(String(1))        # S / C / D / V
+    genero1       = Column(String(1))
+    estado_civil1 = Column(String(1))
     distrito1_id  = Column(Integer, ForeignKey("distritos.id"), nullable=True)
     direccion1    = Column(String(300))
 
@@ -91,16 +98,16 @@ class Contrato(Base):
     direccion2    = Column(String(300))
 
     # Económico
-    moneda        = Column(Enum(Moneda), nullable=False)   # moneda del precio
-    precio        = Column(Float, nullable=False)
-    separacion    = Column(Float, default=0.0)             # siempre en moneda del precio
-    sep_en_soles  = Column(Float, nullable=True)           # separación en soles si precio es USD
-    tipo_cambio   = Column(Float, nullable=True)           # tipo de cambio usado para sep
-    pago          = Column(Float, default=0.0)
+    moneda       = Column(Enum(Moneda), nullable=False)
+    precio       = Column(Float, nullable=False)
+    separacion   = Column(Float, default=0.0)
+    sep_en_soles = Column(Float, nullable=True)
+    tipo_cambio  = Column(Float, nullable=True)
+    pago         = Column(Float, default=0.0)
 
-    # Plazo: fecha fija O meses (uno de los dos)
-    f_pago_total  = Column(Date, nullable=True)
-    plazo_meses   = Column(Integer, nullable=True)         # alternativa a f_pago_total
+    # Plazo
+    f_pago_total = Column(Date, nullable=True)
+    plazo_meses  = Column(Integer, nullable=True)
 
     # Metadatos
     creado_en      = Column(DateTime(timezone=True), server_default=func.now())
@@ -136,9 +143,6 @@ class Template(Base):
     id          = Column(Integer, primary_key=True)
     proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
     color       = Column(Enum(ColorSemaforo), nullable=False)
-    ruta        = Column(String(300), nullable=False)   # ruta relativa al TEMPLATES_DIR
+    ruta        = Column(String(300), nullable=False)
 
     proyecto = relationship("Proyecto", back_populates="templates")
-
-# Patch: agregar fecha_limite_entrega a Proyecto
-# (se agrega como columna nullable para no romper BD existente)
