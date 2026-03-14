@@ -31,7 +31,7 @@ def listar(
         q = q.filter(Contrato.proyecto_id == proyecto_id)
     if busqueda:
         q = q.filter(Contrato.titular.ilike(f"%{busqueda}%"))
-    contratos = q.order_by(Contrato.numero_proyecto.desc()).offset(skip).limit(limit).all()
+    contratos = q.order_by(Contrato.numero_proyecto.asc()).offset(skip).limit(limit).all()
     if estado:
         contratos = [c for c in contratos if c.estado == estado]
     return contratos
