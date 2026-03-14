@@ -22,6 +22,12 @@ ROOT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "").strip()
 MIME_DOCX      = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MIME_FOLDER    = "application/vnd.google-apps.folder"
 
+MESES_ES = {
+    1:"ENE", 2:"FEB", 3:"MAR", 4:"ABR",
+    5:"MAY", 6:"JUN", 7:"JUL", 8:"AGO",
+    9:"SEP", 10:"OCT", 11:"NOV", 12:"DIC"
+}
+
 
 def _get_service():
     """
@@ -89,7 +95,7 @@ def subir_a_drive(ruta_local: Path, proyecto_nombre: str, fecha) -> str:
     # Crear estructura de carpetas
     carpeta_proyecto = _get_or_create_folder(service, proyecto_nombre,     ROOT_FOLDER_ID)
     carpeta_anio     = _get_or_create_folder(service, str(fecha.year),      carpeta_proyecto)
-    carpeta_mes      = _get_or_create_folder(service, f"{fecha.month:02d}", carpeta_anio)
+    carpeta_mes      = _get_or_create_folder(service, MESES_ES[fecha.month], carpeta_anio)
     carpeta_dia      = _get_or_create_folder(service, f"{fecha.day:02d}",   carpeta_mes)
 
     nombre_archivo = ruta_local.name
