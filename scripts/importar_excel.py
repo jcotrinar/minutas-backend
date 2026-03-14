@@ -12,7 +12,10 @@ import openpyxl
 from app.database import SessionLocal
 from app.models import Lote, Distrito, Contrato, Moneda
 
-PREDIO_POR_PARTIDA = {
+# ─── MAPAS PARTIDA → NOMBRE PREDIO por proyecto ─────────────────────────────
+
+# Proyecto 1 — Sol y Luna Malabrigo
+PREDIO_SOL_LUNA = {
     "04020673": "PREDIO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. N° 1866",
     "11578607": "PREDIO MOCAN Y ANEXOS, PARCELA N° 1891",
     "04019384": "PREDIO RURAL VALLE CHICAMA FUNDO MOCAN, SECTOR LA ARENITA CON U.C. 1853",
@@ -23,6 +26,24 @@ PREDIO_POR_PARTIDA = {
     "04017224": "PREDIO FUNDO MOCAN-SECTOR LA ARENITA PARCELA, CON U.C. 1858",
     "11578604": "PREDIO MOCAN Y ANEXOS, PARCELA N° 1859",
     "04020058": "FUNDO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. 1865",
+}
+
+# Proyecto 2 — Santa Beatriz
+PREDIO_SANTA_BEATRIZ = {
+    "11579570": "UC 10399-B, PREDIO VALDIVIA, VALLE MOCHE",
+    "04008773": "LOTE VD.80-III, SECTOR VALDIVIA BAJA, VALLE MOCHE",
+}
+
+# Proyecto 3 — Laureles
+PREDIO_LAURELES = {
+    "11095526": 'PREDIO RURAL DENOMINADO BLOCK "C", LOTE VD.144-III',
+}
+
+# Mapa global por proyecto_id
+PREDIOS_POR_PROYECTO = {
+    1: PREDIO_SOL_LUNA,
+    2: PREDIO_SANTA_BEATRIZ,
+    3: PREDIO_LAURELES,
 }
 
 def _es_error(val):
@@ -200,7 +221,8 @@ def main():
             importar_distritos(wb["DISTRITOS"], db)
 
         if "LOTES" in wb.sheetnames:
-            predio_map = PREDIO_POR_PARTIDA if args.proyecto == 1 else None
+            # Usar el mapa de predios correspondiente al proyecto
+            predio_map = PREDIOS_POR_PROYECTO.get(args.proyecto)
             importar_lotes(wb["LOTES"], db, args.proyecto, predio_map)
 
         hoja_contratos = "Hoja1" if "Hoja1" in wb.sheetnames else wb.sheetnames[0]
