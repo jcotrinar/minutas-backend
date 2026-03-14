@@ -4,39 +4,86 @@ Marcadores estandarizados para todos los proyectos.
 """
 from datetime import date
 
-UNIDADES = ["", "uno", "dos", "tres", "cuatro", "cinco",
-            "seis", "siete", "ocho", "nueve", "diez",
-            "once", "doce", "trece", "catorce", "quince",
-            "dieciséis", "diecisiete", "dieciocho", "diecinueve"]
-DECENAS  = ["", "diez", "veinte", "treinta", "cuarenta",
-            "cincuenta", "sesenta", "setenta", "ochenta", "noventa"]
-CENTENAS = ["", "cien", "doscientos", "trescientos", "cuatrocientos",
-            "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"]
+# ─── NÚMERO A LETRAS ──────────────────────────────────────────────────────────
+
+_UNIDADES = [
+    "", "uno", "dos", "tres", "cuatro", "cinco",
+    "seis", "siete", "ocho", "nueve", "diez",
+    "once", "doce", "trece", "catorce", "quince",
+    "dieciséis", "diecisiete", "dieciocho", "diecinueve",
+    "veinte",
+]
+
+_VEINTI = [
+    "", "veintiuno", "veintidós", "veintitrés", "veinticuatro", "veinticinco",
+    "veintiséis", "veintisiete", "veintiocho", "veintinueve",
+]
+
+_DECENAS = [
+    "", "diez", "veinte", "treinta", "cuarenta",
+    "cincuenta", "sesenta", "setenta", "ochenta", "noventa",
+]
+
+_CENTENAS = [
+    "", "ciento", "doscientos", "trescientos", "cuatrocientos",
+    "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos",
+]
+
 
 def _entero_a_letras(n: int) -> str:
-    if n == 0:   return "cero"
-    if n < 0:    return "menos " + _entero_a_letras(-n)
-    if n >= 1_000_000: raise ValueError("Número demasiado grande")
-    r = ""
+    if n == 0:
+        return "cero"
+    if n < 0:
+        return "menos " + _entero_a_letras(-n)
+    if n >= 1_000_000:
+        raise ValueError("Número demasiado grande")
+
+    partes = []
+
+    # Millares
     if n >= 1000:
-        m = n // 1000
-        r += ("mil " if m == 1 else _entero_a_letras(m) + " mil ")
+        miles = n // 1000
+        if miles == 1:
+            partes.append("mil")
+        else:
+            txt_miles = _entero_a_letras(miles)
+            # veintiuno → veintiún, uno → un (apócope antes de "mil")
+            txt_miles = txt_miles.replace("veintiuno", "veintiún").replace("uno", "un") if txt_miles.endswith("uno") else txt_miles
+            partes.append(txt_miles + " mil")
         n %= 1000
+
+    # Centenas
     if n >= 100:
-        r += ("cien " if n == 100 else CENTENAS[n // 100] + " ")
-        n %= 100
-    if n >= 20:
-        d, u = n // 10, n % 10
-        r += DECENAS[d] + (" y " + UNIDADES[u] if u else "") + " "
-    elif n > 0:
-        r += UNIDADES[n] + " "
-    return r.strip()
+        c = n // 100
+        resto = n % 100
+        if n == 100:
+            partes.append("cien")          # exactamente 100
+            n = 0
+        else:
+            partes.append(_CENTENAS[c])    # ciento, doscientos, etc.
+            n = resto
+    
+    # Decenas y unidades
+    if n > 0:
+        if n <= 20:
+            partes.append(_UNIDADES[n])
+        elif n < 30:
+            partes.append(_VEINTI[n - 20]) # veintiuno … veintinueve
+        else:
+            d, u = n // 10, n % 10
+            if u == 0:
+                partes.append(_DECENAS[d])
+            else:
+                partes.append(_DECENAS[d] + " y " + _UNIDADES[u])
+
+    return " ".join(partes)
+
 
 def numero_a_letras(monto: float, moneda: str = "SOLES") -> str:
     monto   = round(monto, 2)
     entero  = int(monto)
     decimal = round((monto - entero) * 100)
-    sufijo  = "DOLARES AMERICANOS" if moneda == "DOLARES" else "SOLES"
+    sufijo  = "DÓLARES AMERICANOS" if moneda == "DOLARES" else "SOLES"
     return f"{_entero_a_letras(entero).upper()} Y {decimal:02d}/100 {sufijo}"
 
 def area_a_letras(area: float) -> str:
@@ -55,8 +102,11 @@ def decimal_str(monto: float) -> str:
 def fmt(monto: float) -> str:
     return f"{monto:,.2f}"
 
-MESES = {1:"ENERO",2:"FEBRERO",3:"MARZO",4:"ABRIL",5:"MAYO",6:"JUNIO",
-         7:"JULIO",8:"AGOSTO",9:"SEPTIEMBRE",10:"OCTUBRE",11:"NOVIEMBRE",12:"DICIEMBRE"}
+MESES = {
+    1:"ENERO", 2:"FEBRERO", 3:"MARZO", 4:"ABRIL",
+    5:"MAYO", 6:"JUNIO", 7:"JULIO", 8:"AGOSTO",
+    9:"SEPTIEMBRE", 10:"OCTUBRE", 11:"NOVIEMBRE", 12:"DICIEMBRE"
+}
 
 def fecha_a_texto(d: date) -> str:
     return f"{d.day:02d} DE {MESES[d.month]} DEL {d.year}"
@@ -66,23 +116,17 @@ def plazo_a_texto(meses: int) -> str:
 
 
 def plazo_entrega_texto(fecha_contrato, fecha_limite_entrega) -> tuple:
-    """
-    Calcula el plazo de entrega dinámico.
-    Retorna (numero, texto) ej: (20, 'VEINTE')
-    fecha_limite_entrega es fija del proyecto,
-    fecha_contrato varía por contrato.
-    """
     from dateutil.relativedelta import relativedelta
     if not fecha_limite_entrega:
         return (0, "")
-    diff = relativedelta(fecha_limite_entrega, fecha_contrato)
+    diff  = relativedelta(fecha_limite_entrega, fecha_contrato)
     meses = diff.years * 12 + diff.months
     if meses < 0:
         meses = 0
     return (meses, _entero_a_letras(meses).upper())
 
 def estado_civil_texto(ec: str, genero: str) -> str:
-    base = {"S":"SOLTER","C":"CASAD","D":"DIVORCIAD","V":"VIUD"}.get(ec.upper(), "")
+    base = {"S": "SOLTER", "C": "CASAD", "D": "DIVORCIAD", "V": "VIUD"}.get(ec.upper(), "")
     return base + ("A" if genero.upper() == "F" else "O")
 
 def identificado_texto(genero: str) -> str:
@@ -94,13 +138,13 @@ def comprador_texto(genero: str, tiene_coprop: bool = False) -> str:
     return "LA PROMITENTE COMPRADORA" if genero.upper() == "F" else "EL PROMITENTE COMPRADOR"
 
 def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
-    moneda       = contrato.moneda
-    precio       = contrato.precio or 0.0
-    separacion   = contrato.separacion or 0.0
-    sep_soles    = contrato.sep_en_soles or 0.0
-    tipo_cambio  = contrato.tipo_cambio or 0.0
-    pago         = contrato.pago or 0.0
-    saldo        = contrato.saldo
+    moneda      = contrato.moneda
+    precio      = contrato.precio      or 0.0
+    separacion  = contrato.separacion  or 0.0
+    sep_soles   = contrato.sep_en_soles or 0.0
+    tipo_cambio = contrato.tipo_cambio  or 0.0
+    pago        = contrato.pago        or 0.0
+    saldo       = contrato.saldo
     tiene_coprop = bool(contrato.copropietario)
 
     ubigeo1 = ""
@@ -118,9 +162,12 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     plazo_num  = contrato.plazo_meses or 0
     plazo_txt  = plazo_a_texto(plazo_num) if plazo_num else ""
 
-    # Plazo de entrega dinámico (desde fecha contrato hasta fecha límite del proyecto)
+    # Plazo de entrega dinámico
     fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
-    entrega_num, entrega_txt = plazo_entrega_texto(contrato.fecha, fecha_limite)
+    entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
+
+    # Entrega configurable por proyecto (tiene prioridad sobre el cálculo dinámico)
+    entrega_texto_proyecto = getattr(contrato.proyecto, 'entrega_texto', None) if contrato.proyecto else None
 
     return {
         "FECHA":             fecha_a_texto(contrato.fecha),
@@ -165,12 +212,11 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "SALDO_DECIMAL":     decimal_str(saldo),
         "FECHA_PAGO":        fecha_pago,
         "ENTREGA":           str(entrega_num) if entrega_num else "",
-        "ENTREGA_TEXTO":     entrega_txt,
+        "ENTREGA_TEXTO":     entrega_texto_proyecto or entrega_txt_calc,
         "PLAZO":             str(plazo_num) if plazo_num else "",
         "PLAZO_TEXTO":       plazo_txt,
     }
 
 
 def entrega_a_texto(meses: int) -> str:
-    """20 → 'VEINTE (20) MESES'"""
     return f"{_entero_a_letras(meses).upper()} ({meses}) MESES"
