@@ -156,6 +156,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "SEP_SOLES_DECIMAL": decimal_str(sep_soles) if sep_soles else "",
         "TIPO_CAMBIO":       fmt(tipo_cambio) if tipo_cambio else "",
         "TC_TEXTO":          numero_a_letras(tipo_cambio, "SOLES") if tipo_cambio else "",
+        "TC_DECIMAL":        decimal_str(tipo_cambio) if tipo_cambio else "",
         "PAGO":              fmt(pago),
         "PAGO_TEXTO":        numero_a_letras(pago, moneda),
         "PAGO_DECIMAL":      decimal_str(pago),
