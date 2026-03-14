@@ -123,10 +123,15 @@ def importar_contratos(ws, db, proyecto_id: int, moneda: str = "SOLES"):
 
     importados = 0
     errores    = 0
-    # numero_proyecto se asigna secuencialmente durante la importación
+
+    # Leer todas las filas primero para invertir el orden
+    # Así el contrato más reciente del Excel (última fila) queda con numero_proyecto más alto
+    todas_filas = [row for row in ws.iter_rows(min_row=6, values_only=True) if row[0]]
+    todas_filas.reverse()  # invertir: última fila del Excel = numero_proyecto 1, primera = el mayor
+
     numero_proyecto = 1
 
-    for row in ws.iter_rows(min_row=6, values_only=True):
+    for row in todas_filas:
         if not row[0]: continue
 
         fecha      = _sd(row[1])
