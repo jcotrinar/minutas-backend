@@ -12,8 +12,8 @@ class ProyectoOut(BaseModel):
     nombre:        str
     moneda:        Moneda
     activo:        bool
-    entrega:       Optional[str]       # tipo de entrega configurado en el proyecto
-    entrega_texto: Optional[str]       # texto que va al marcador «ENTREGA_TEXTO»
+    entrega:       Optional[str]
+    entrega_texto: Optional[str]
     class Config: from_attributes = True
 
 
@@ -43,7 +43,6 @@ class DistritoOut(BaseModel):
 # ─── CONTRATOS ────────────────────────────────────────────────────────────────
 
 class ContratoCreate(BaseModel):
-    numero:        int
     proyecto_id:   int
     lote_id:       int
     fecha:         date
@@ -113,28 +112,28 @@ class LoteResumen(BaseModel):
 
 
 class ContratoOut(BaseModel):
-    id:            int
-    numero:        int
-    proyecto_id:   int
-    lote_id:       int
-    fecha:         date
-    titular:       str
-    dni:           Optional[str]
-    ocupacion1:    Optional[str]
-    genero1:       Optional[str]
-    estado_civil1: Optional[str]
-    direccion1:    Optional[str]
-    copropietario: Optional[str]
-    moneda:        Moneda
-    precio:        float
-    separacion:    float
-    sep_en_soles:  Optional[float]
-    tipo_cambio:   Optional[float]
-    pago:          float
-    f_pago_total:  Optional[date]
-    plazo_meses:   Optional[int]
-    saldo:         float
-    estado:        str
-    creado_en:     Optional[datetime]
-    lote:          Optional[LoteResumen]
+    id:              int
+    numero_proyecto: int       # correlativo por proyecto
+    proyecto_id:     int
+    lote_id:         int
+    fecha:           date
+    titular:         str
+    dni:             Optional[str]
+    ocupacion1:      Optional[str]
+    genero1:         Optional[str]
+    estado_civil1:   Optional[str]
+    direccion1:      Optional[str]
+    copropietario:   Optional[str]
+    moneda:          Moneda
+    precio:          float
+    separacion:      float
+    sep_en_soles:    Optional[float]
+    tipo_cambio:     Optional[float]
+    pago:            float
+    f_pago_total:    Optional[date]
+    plazo_meses:     Optional[int]
+    saldo:           float
+    estado:          str
+    creado_en:       Optional[datetime]
+    lote:            Optional[LoteResumen]
     class Config: from_attributes = True

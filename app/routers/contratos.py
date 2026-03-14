@@ -1,12 +1,21 @@
 """routers/contratos.py"""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from app.database import get_db
 from app.models import Contrato
 from app.schemas import ContratoCreate, ContratoUpdate, ContratoOut
 
 router = APIRouter()
+
+
+def _siguiente_numero(db: Session, proyecto_id: int) -> int:
+    """Calcula el siguiente numero_proyecto para el proyecto dado."""
+    maximo = db.query(func.max(Contrato.numero_proyecto)).filter(
+        Contrato.proyecto_id == proyecto_id
+    ).scalar()
+    return (maximo or 0) + 1
 
 
 @router.get("/", response_model=List[ContratoOut])
@@ -22,7 +31,7 @@ def listar(
         q = q.filter(Contrato.proyecto_id == proyecto_id)
     if busqueda:
         q = q.filter(Contrato.titular.ilike(f"%{busqueda}%"))
-    contratos = q.order_by(Contrato.numero.desc()).offset(skip).limit(limit).all()
+    contratos = q.order_by(Contrato.numero_proyecto.desc()).offset(skip).limit(limit).all()
     if estado:
         contratos = [c for c in contratos if c.estado == estado]
     return contratos
@@ -38,9 +47,12 @@ def obtener(id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=ContratoOut, status_code=201)
 def crear(data: ContratoCreate, db: Session = Depends(get_db)):
-    if db.query(Contrato).filter(Contrato.numero == data.numero).first():
-        raise HTTPException(400, f"Ya existe el contrato número {data.numero}")
-    c = Contrato(**data.model_dump())
+    # El backend calcula el siguiente número automáticamente
+    siguiente = _siguiente_numero(db, data.proyecto_id)
+    c = Contrato(
+        numero_proyecto=siguiente,
+        **data.model_dump()
+    )
     db.add(c)
     db.commit()
     db.refresh(c)

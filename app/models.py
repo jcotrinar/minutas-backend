@@ -2,9 +2,8 @@
 models.py — Modelos de base de datos simplificados.
 4 tablas reales + distritos para autocompletar ubigeo.
 """
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, ForeignKey, Enum, Text
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import DeclarativeBase  # ✅ API moderna SQLAlchemy 2.x
+from sqlalchemy import Column, Integer, String, Float, Date, Boolean, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy.orm import relationship, DeclarativeBase
 from sqlalchemy.sql import func
 from sqlalchemy import DateTime
 import enum
@@ -36,10 +35,8 @@ class Proyecto(Base):
     activo      = Column(Boolean, default=True)
 
     fecha_limite_entrega = Column(Date, nullable=True)
-
-    # Configuración global de entrega del lote para todos los contratos del proyecto
-    entrega       = Column(String(50),  nullable=True)   # ej: "INMEDIATA", "AL_FINALIZAR_HABILITACION", "FECHA_ESPECIFICA"
-    entrega_texto = Column(String(500), nullable=True)   # texto que se inserta en «ENTREGA_TEXTO»
+    entrega              = Column(String(50),  nullable=True)
+    entrega_texto        = Column(String(500), nullable=True)
 
     lotes      = relationship("Lote",     back_populates="proyecto")
     contratos  = relationship("Contrato", back_populates="proyecto")
@@ -73,11 +70,11 @@ class Distrito(Base):
 class Contrato(Base):
     __tablename__ = "contratos"
 
-    id          = Column(Integer, primary_key=True)
-    numero      = Column(Integer, unique=True, nullable=False)
-    proyecto_id = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
-    lote_id     = Column(Integer, ForeignKey("lotes.id"), nullable=False)
-    fecha       = Column(Date, nullable=False)
+    id               = Column(Integer, primary_key=True)
+    numero_proyecto  = Column(Integer, nullable=False)  # correlativo por proyecto (1,2,3...)
+    proyecto_id      = Column(Integer, ForeignKey("proyectos.id"), nullable=False)
+    lote_id          = Column(Integer, ForeignKey("lotes.id"), nullable=False)
+    fecha            = Column(Date, nullable=False)
 
     # Titular
     titular       = Column(String(200), nullable=False)
@@ -113,6 +110,11 @@ class Contrato(Base):
     creado_en      = Column(DateTime(timezone=True), server_default=func.now())
     actualizado_en = Column(DateTime(timezone=True), onupdate=func.now())
     sincronizado   = Column(Boolean, default=False)
+
+    # numero_proyecto único por proyecto
+    __table_args__ = (
+        UniqueConstraint("proyecto_id", "numero_proyecto", name="uq_contrato_numero_proyecto"),
+    )
 
     # Relaciones
     proyecto  = relationship("Proyecto",  back_populates="contratos")

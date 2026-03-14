@@ -12,7 +12,6 @@ import openpyxl
 from app.database import SessionLocal
 from app.models import Lote, Distrito, Contrato, Moneda
 
-# ─── MAPA PARTIDA → NOMBRE PREDIO (Sol y Luna) ───────────────────────────────
 PREDIO_POR_PARTIDA = {
     "04020673": "PREDIO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. N° 1866",
     "11578607": "PREDIO MOCAN Y ANEXOS, PARCELA N° 1891",
@@ -26,44 +25,34 @@ PREDIO_POR_PARTIDA = {
     "04020058": "FUNDO MOCAN LA ARENITA, VALLE CHICAMA, CON U.C. 1865",
 }
 
-# ─── HELPERS ─────────────────────────────────────────────────────────────────
-
 def _es_error(val):
     return isinstance(val, str) and val.startswith("#")
 
 def _sf(val, default=None):
-    """Safe float"""
     if val is None or _es_error(str(val) if val else ""): return default
     try: return float(val)
     except: return default
 
 def _si(val, default=None):
-    """Safe int"""
     v = _sf(val)
     return int(v) if v is not None else default
 
 def _ss(val, default=""):
-    """Safe string"""
     if val is None or _es_error(str(val)): return default
     return str(val).strip()
 
 def _sd(val):
-    """Safe date"""
     if val is None: return None
     if hasattr(val, 'date'): return val.date()
     if hasattr(val, 'year'): return val
     return None
 
 
-# ─── IMPORTAR DISTRITOS ──────────────────────────────────────────────────────
-
 def importar_distritos(ws, db):
     print("Importando distritos...")
-    # Verificar si ya hay distritos
     if db.query(Distrito).count() > 0:
         print("  → Distritos ya importados, saltando.")
         return
-
     batch = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         region, provincia, distrito = row[0], row[1], row[2]
@@ -74,120 +63,73 @@ def importar_distritos(ws, db):
             distrito=_ss(distrito).upper(),
         ))
         if len(batch) >= 200:
-            db.bulk_save_objects(batch)
-            db.commit()
-            batch = []
-
+            db.bulk_save_objects(batch); db.commit(); batch = []
     if batch:
-        db.bulk_save_objects(batch)
-        db.commit()
+        db.bulk_save_objects(batch); db.commit()
+    print(f"  → {db.query(Distrito).count()} distritos importados")
 
-    total = db.query(Distrito).count()
-    print(f"  → {total} distritos importados")
-
-
-# ─── IMPORTAR LOTES ──────────────────────────────────────────────────────────
 
 def importar_lotes(ws, db, proyecto_id: int, predio_por_partida: dict = None):
-    """
-    Hoja LOTES: cols MZ, LOTE, AREA, UC, PARTIDA, HAS, MZ-LT
-    Para Sol y Luna usa PREDIO_POR_PARTIDA.
-    Para otros proyectos pasar predio_por_partida=None y llenar manualmente.
-    """
     print(f"Importando lotes para proyecto {proyecto_id}...")
-
-    # Limpiar lotes existentes del proyecto
     db.query(Lote).filter(Lote.proyecto_id == proyecto_id).delete()
     db.commit()
-
     errores = 0
     lotes = []
-
-    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
-        if not row[0]: continue  # fila vacía
-
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row[0]: continue
         manzana = _ss(row[0])
         numero  = _ss(row[1])
         area    = _sf(row[2])
         partida = _ss(row[4]) if len(row) > 4 else ""
-
         if not manzana or not numero or area is None:
-            errores += 1
-            continue
-
-        nombre_predio = None
-        if predio_por_partida and partida:
-            nombre_predio = predio_por_partida.get(partida)
-
+            errores += 1; continue
+        nombre_predio = predio_por_partida.get(partida) if predio_por_partida and partida else None
         lotes.append(Lote(
-            proyecto_id=proyecto_id,
-            manzana=manzana,
-            numero=numero,
-            area=area,
-            partida=partida or None,
-            nombre_predio=nombre_predio,
+            proyecto_id=proyecto_id, manzana=manzana, numero=numero,
+            area=area, partida=partida or None, nombre_predio=nombre_predio,
         ))
-
         if len(lotes) >= 200:
-            db.bulk_save_objects(lotes)
-            db.commit()
-            lotes = []
-
+            db.bulk_save_objects(lotes); db.commit(); lotes = []
     if lotes:
-        db.bulk_save_objects(lotes)
-        db.commit()
+        db.bulk_save_objects(lotes); db.commit()
+    print(f"  → {db.query(Lote).filter(Lote.proyecto_id == proyecto_id).count()} lotes importados ({errores} errores)")
 
-    total = db.query(Lote).filter(Lote.proyecto_id == proyecto_id).count()
-    print(f"  → {total} lotes importados ({errores} errores)")
-
-
-# ─── IMPORTAR CONTRATOS ──────────────────────────────────────────────────────
 
 def importar_contratos(ws, db, proyecto_id: int, moneda: str = "SOLES"):
-    """
-    Hoja1 de MINUTAS.xlsm — cabecera en fila 5, datos desde fila 6.
-    Cols desde B: FECHA, MZ, LOTE, PR, ATOTAL, PRECIO, AREA, %, TITULAR,
-                  OCUPACION1, GENERO1, ESTADO_CIVIL1, DNI, DIRECCION1,
-                  COPROPIETARIO, OCUPACION2, GENERO2, ESTADO_CIVIL2, DNI2,
-                  DIRECCION2, SEPARACION, PAGO, SALDO, FSEPARACION
-    """
     print(f"Importando contratos para proyecto {proyecto_id}...")
-
-    # Limpiar contratos existentes del proyecto
     db.query(Contrato).filter(Contrato.proyecto_id == proyecto_id).delete()
     db.commit()
 
     importados = 0
     errores    = 0
+    # numero_proyecto se asigna secuencialmente durante la importación
+    numero_proyecto = 1
 
-    for i, row in enumerate(ws.iter_rows(min_row=6, values_only=True), start=6):
-        numero_fila = row[0]  # col A = correlativo
-        if not numero_fila: continue
+    for row in ws.iter_rows(min_row=6, values_only=True):
+        if not row[0]: continue
 
-        # Columnas (0-indexed desde col A)
-        fecha       = _sd(row[1])
-        mz          = _ss(row[2])
-        lote_num    = _ss(row[3])
-        precio      = _sf(row[6], 0.0)
-        titular     = _ss(row[9])
-        ocupacion1  = _ss(row[10])
-        genero1     = _ss(row[11])
-        estado_c1   = _ss(row[12])
-        dni         = _ss(row[13])
-        direccion1  = _ss(row[14])
-        copropiet   = _ss(row[15])
-        ocupacion2  = _ss(row[16])
-        genero2     = _ss(row[17])
-        estado_c2   = _ss(row[18])
-        dni2        = _ss(row[19])
-        direccion2  = _ss(row[20])
-        separacion  = _sf(row[21], 0.0)
-        pago        = _sf(row[22], 0.0)
-        f_sep       = _sd(row[24]) if len(row) > 24 else None
+        fecha      = _sd(row[1])
+        mz         = _ss(row[2])
+        lote_num   = _ss(row[3])
+        precio     = _sf(row[6], 0.0)
+        titular    = _ss(row[9])
+        ocupacion1 = _ss(row[10])
+        genero1    = _ss(row[11])
+        estado_c1  = _ss(row[12])
+        dni        = _ss(row[13])
+        direccion1 = _ss(row[14])
+        copropiet  = _ss(row[15])
+        ocupacion2 = _ss(row[16])
+        genero2    = _ss(row[17])
+        estado_c2  = _ss(row[18])
+        dni2       = _ss(row[19])
+        direccion2 = _ss(row[20])
+        separacion = _sf(row[21], 0.0)
+        pago       = _sf(row[22], 0.0)
+        f_sep      = _sd(row[24]) if len(row) > 24 else None
 
         if not titular or not fecha: continue
 
-        # Buscar lote en BD
         lote = db.query(Lote).filter(
             Lote.proyecto_id == proyecto_id,
             Lote.manzana == mz,
@@ -195,17 +137,10 @@ def importar_contratos(ws, db, proyecto_id: int, moneda: str = "SOLES"):
         ).first()
 
         if not lote:
-            errores += 1
-            continue
-
-        # Verificar número único
-        numero = _si(numero_fila)
-        if db.query(Contrato).filter(Contrato.numero == numero).first():
-            errores += 1
-            continue
+            errores += 1; continue
 
         c = Contrato(
-            numero=numero,
+            numero_proyecto=numero_proyecto,   # ← correlativo secuencial por proyecto
             proyecto_id=proyecto_id,
             lote_id=lote.id,
             fecha=fecha,
@@ -228,6 +163,7 @@ def importar_contratos(ws, db, proyecto_id: int, moneda: str = "SOLES"):
             f_pago_total=f_sep,
         )
         db.add(c)
+        numero_proyecto += 1
         importados += 1
 
         if importados % 100 == 0:
@@ -237,8 +173,6 @@ def importar_contratos(ws, db, proyecto_id: int, moneda: str = "SOLES"):
     db.commit()
     print(f"  → {importados} contratos importados ({errores} errores)")
 
-
-# ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
@@ -251,7 +185,6 @@ def main():
     db = SessionLocal()
     try:
         if args.solo_distritos:
-            print("Abriendo Excel para distritos...")
             wb = openpyxl.load_workbook(args.excel, read_only=True, data_only=True)
             importar_distritos(wb["DISTRITOS"], db)
             return
@@ -263,22 +196,17 @@ def main():
         print(f"Abriendo {args.excel}...")
         wb = openpyxl.load_workbook(args.excel, read_only=True, data_only=True)
 
-        # Distritos (solo si no existen)
         if "DISTRITOS" in wb.sheetnames:
             importar_distritos(wb["DISTRITOS"], db)
 
-        # Lotes
         if "LOTES" in wb.sheetnames:
-            # Sol y Luna usa el mapa de predios por partida
             predio_map = PREDIO_POR_PARTIDA if args.proyecto == 1 else None
             importar_lotes(wb["LOTES"], db, args.proyecto, predio_map)
 
-        # Contratos
         hoja_contratos = "Hoja1" if "Hoja1" in wb.sheetnames else wb.sheetnames[0]
         importar_contratos(wb[hoja_contratos], db, args.proyecto, args.moneda)
 
         print("\n✓ Importación completada.")
-
     finally:
         db.close()
 
