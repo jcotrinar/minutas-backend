@@ -166,8 +166,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
     entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
 
-    # Entrega configurable por proyecto (tiene prioridad sobre el cálculo dinámico)
-    entrega_texto_proyecto = getattr(contrato.proyecto, 'entrega_texto', None) if contrato.proyecto else None
+
 
     return {
         "FECHA":             fecha_a_texto(contrato.fecha),
@@ -212,7 +211,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "SALDO_DECIMAL":     decimal_str(saldo),
         "FECHA_PAGO":        fecha_pago,
         "ENTREGA":           str(entrega_num) if entrega_num else "",
-        "ENTREGA_TEXTO":     entrega_texto_proyecto or entrega_txt_calc,
+        "ENTREGA_TEXTO":     entrega_txt_calc,
         "PLAZO":             str(plazo_num) if plazo_num else "",
         "PLAZO_TEXTO":       plazo_txt,
     }
