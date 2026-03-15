@@ -210,8 +210,9 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "SALDO_TEXTO":       numero_a_letras(saldo, moneda),
         "SALDO_DECIMAL":     decimal_str(saldo),
         "FECHA_PAGO":        fecha_pago,
-        "ENTREGA":           str(entrega_num) if entrega_num else "",
-        "ENTREGA_TEXTO":     entrega_txt_calc,
+        "ENTREGA":             str(entrega_num) if entrega_num else "",
+        "ENTREGA_TEXTO":       entrega_txt_calc,
+        "MODALIDAD_ENTREGA":   (getattr(contrato.proyecto, "entrega_texto", None) or "").upper(),
         "PLAZO":             str(plazo_num) if plazo_num else "",
         "PLAZO_TEXTO":       plazo_txt,
     }
