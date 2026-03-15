@@ -8,12 +8,13 @@ from app.models import Moneda, ColorSemaforo
 # ─── PROYECTOS ────────────────────────────────────────────────────────────────
 
 class ProyectoOut(BaseModel):
-    id:            int
-    nombre:        str
-    moneda:        Moneda
-    activo:        bool
-    entrega:       Optional[str]
-    entrega_texto: Optional[str]
+    id:                   int
+    nombre:               str
+    moneda:               Moneda
+    activo:               bool
+    entrega:              Optional[str]
+    entrega_texto:        Optional[str]
+    fecha_limite_entrega: Optional[date]
     class Config: from_attributes = True
 
 
