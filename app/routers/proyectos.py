@@ -17,8 +17,9 @@ router = APIRouter()
 # ── Schema solo para el PATCH de entrega ────────────────────────────────────
 
 class EntregaUpdate(BaseModel):
-    entrega:       str
-    entrega_texto: str
+    entrega:               str
+    entrega_texto:         str
+    fecha_limite_entrega:  Optional[str] = None   # "YYYY-MM-DD" o null
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -47,8 +48,13 @@ def actualizar_entrega(
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
 
+    from datetime import date
     proyecto.entrega       = data.entrega
     proyecto.entrega_texto = data.entrega_texto.strip()
+    if data.fecha_limite_entrega:
+        proyecto.fecha_limite_entrega = date.fromisoformat(data.fecha_limite_entrega)
+    else:
+        proyecto.fecha_limite_entrega = None
     db.commit()
     db.refresh(proyecto)
     return proyecto
