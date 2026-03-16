@@ -135,7 +135,7 @@ def identificado_texto(genero: str) -> str:
 def comprador_texto(genero: str, tiene_coprop: bool = False) -> str:
     if tiene_coprop:
         return "LOS COMPRADORES"
-    return "LA PROMITENTE COMPRADORA" if genero.upper() == "F" else "EL PROMITENTE COMPRADOR"
+    return "LA COMPRADORA" if genero.upper() == "F" else "EL COMPRADOR"
 
 def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     moneda      = contrato.moneda
@@ -217,6 +217,3 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "PLAZO_TEXTO":       plazo_txt,
     }
 
-
-def entrega_a_texto(meses: int) -> str:
-    return f"{_entero_a_letras(meses).upper()} ({meses}) MESES"
