@@ -20,6 +20,7 @@ from googleapiclient.http import MediaFileUpload
 SCOPES         = ["https://www.googleapis.com/auth/drive"]
 ROOT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "").strip()
 MIME_DOCX      = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+MIME_PDF       = "application/pdf"
 MIME_FOLDER    = "application/vnd.google-apps.folder"
 
 MESES_ES = {
@@ -98,7 +99,7 @@ def subir_a_drive(ruta_local: Path, proyecto_nombre: str, fecha) -> str:
     carpeta_mes      = _get_or_create_folder(service, MESES_ES[fecha.month], carpeta_anio)
     carpeta_dia      = _get_or_create_folder(service, f"{fecha.day:02d}",   carpeta_mes)
 
-    nombre_archivo = ruta_local.name
+    nombre_archivo = ruta_local.name  # ya llega como .pdf desde generador_minutas
 
     # Reemplazar si ya existe
     q = (
@@ -107,7 +108,7 @@ def subir_a_drive(ruta_local: Path, proyecto_nombre: str, fecha) -> str:
         f"and trashed=false"
     )
     existentes = service.files().list(q=q, fields="files(id)").execute().get("files", [])
-    media = MediaFileUpload(str(ruta_local), mimetype=MIME_DOCX, resumable=False)
+    media = MediaFileUpload(str(ruta_local), mimetype=MIME_PDF, resumable=False)
 
     if existentes:
         file_id = existentes[0]["id"]

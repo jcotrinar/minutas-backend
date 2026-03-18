@@ -201,14 +201,42 @@ def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> 
             zout.writestr(nombre, data)
     Path(tmp).replace(ruta_salida)
 
-    # ── Subir a Drive (no bloquea si falla) ───────────────────────────────────
+    # ── Subir a Drive en PDF (no bloquea si falla) ────────────────────────────
     try:
         from app.services.drive_service import subir_a_drive
         proyecto_nombre = contrato.proyecto.nombre if contrato.proyecto else "Proyecto"
-        subir_a_drive(ruta_salida, proyecto_nombre, fecha)
+        ruta_pdf = _convertir_a_pdf(ruta_salida)
+        subir_a_drive(ruta_pdf, proyecto_nombre, fecha)
     except Exception as e:
-        # El archivo local igual se retorna aunque Drive falle
+        # El archivo local (Word) igual se retorna aunque Drive falle
         import logging
         logging.getLogger(__name__).warning(f"Drive upload falló: {e}")
 
-    return ruta_salida
+    return ruta_salida  # El usuario siempre recibe el .docx
+
+
+def _convertir_a_pdf(ruta_docx: Path) -> Path:
+    """
+    Convierte un .docx a .pdf usando LibreOffice headless.
+    Retorna la ruta del PDF generado (misma carpeta que el docx).
+    Requiere LibreOffice instalado en el servidor (Railway/Linux).
+    """
+    import subprocess
+    resultado = subprocess.run(
+        [
+            "libreoffice", "--headless", "--convert-to", "pdf",
+            "--outdir", str(ruta_docx.parent),
+            str(ruta_docx),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if resultado.returncode != 0:
+        raise RuntimeError(
+            f"LibreOffice falló al convertir a PDF: {resultado.stderr}"
+        )
+    ruta_pdf = ruta_docx.with_suffix(".pdf")
+    if not ruta_pdf.exists():
+        raise FileNotFoundError(f"PDF no fue generado: {ruta_pdf}")
+    return ruta_pdf
