@@ -1,21 +1,15 @@
 """
 drive_service.py — Sube minutas a Google Drive usando OAuth2.
-
-Estructura de carpetas en Drive:
-  DRIVE_FOLDER_ID/
-  └── {Proyecto}/
-      └── {Año}/
-          └── {Mes}/
-              └── {Dia}/
-                  └── A-3,Sol y Luna Malabrigo.docx
 """
 import os
 import json
 from pathlib import Path
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleRequest
+import google.auth.transport.requests
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+import requests
 
 SCOPES         = ["https://www.googleapis.com/auth/drive"]
 ROOT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "").strip()
@@ -31,16 +25,10 @@ MESES_ES = {
 
 
 def _get_service():
-    """
-    Autentica con OAuth2 usando el token guardado en GOOGLE_OAUTH_TOKEN (Railway)
-    o en token.json (local).
-    El refresh_token renueva el acceso automáticamente — no expira.
-    """
     token_json = os.getenv("GOOGLE_OAUTH_TOKEN")
     if token_json:
         token_data = json.loads(token_json)
     else:
-        # Desarrollo local
         with open("token.json") as f:
             token_data = json.load(f)
 
@@ -53,15 +41,20 @@ def _get_service():
         scopes=token_data.get("scopes", SCOPES),
     )
 
-    # Refrescar token si está vencido
     if not creds.valid:
-        creds.refresh(Request())
+        # Se añade sesión con timeout explícito para refrescar el token
+        session = requests.Session()
+        request_adapter = GoogleRequest(session=session)
+        creds.refresh(request_adapter)
 
-    return build("drive", "v3", credentials=creds, cache_discovery=False)
+    # ── NUEVO: Forzar Timeout en las conexiones HTTP con Google API ──────────
+    authenticated_session = google.auth.transport.requests.AuthorizedSession(creds)
+    authenticated_session.timeout = 90.0  # 90 segundos límite por petición HTTP
+
+    return build("drive", "v3", http=authenticated_session, cache_discovery=False)
 
 
 def _get_or_create_folder(service, nombre: str, parent_id: str) -> str:
-    """Busca carpeta por nombre dentro de parent_id. Si no existe, la crea."""
     q = (
         f"name='{nombre}' "
         f"and mimeType='{MIME_FOLDER}' "
@@ -83,25 +76,18 @@ def _get_or_create_folder(service, nombre: str, parent_id: str) -> str:
 
 
 def subir_a_drive(ruta_local: Path, proyecto_nombre: str, fecha) -> str:
-    """
-    Sube el archivo a Drive en la estructura:
-      ROOT / Proyecto / Año / Mes / Dia
-    Retorna el link del archivo subido.
-    """
     if not ROOT_FOLDER_ID:
         raise ValueError("DRIVE_FOLDER_ID no está configurado")
 
     service = _get_service()
 
-    # Crear estructura de carpetas
     carpeta_proyecto = _get_or_create_folder(service, proyecto_nombre,     ROOT_FOLDER_ID)
     carpeta_anio     = _get_or_create_folder(service, str(fecha.year),      carpeta_proyecto)
     carpeta_mes      = _get_or_create_folder(service, MESES_ES[fecha.month], carpeta_anio)
     carpeta_dia      = _get_or_create_folder(service, f"{fecha.day:02d}",   carpeta_mes)
 
-    nombre_archivo = ruta_local.name  # ya llega como .pdf desde generador_minutas
+    nombre_archivo = ruta_local.name
 
-    # Reemplazar si ya existe
     q = (
         f"name='{nombre_archivo}' "
         f"and '{carpeta_dia}' in parents "

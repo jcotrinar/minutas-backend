@@ -11,6 +11,8 @@ Fix v3:
 import os
 import re
 import zipfile
+import threading
+import logging
 from pathlib import Path
 from copy import deepcopy
 from lxml import etree
@@ -61,8 +63,6 @@ def _reemplazar_parrafo(parrafo, variables: dict):
         return
 
     # ── Construir mapa de posición → rPr ──────────────────────────────────────
-    # Para cada posición del texto completo, guardamos el rPr del run original.
-    # Esto nos permite saber qué formato aplicar a cada carácter.
     pos_rpr = []
     for run in runs:
         rpr = _get_rpr(run)
@@ -70,8 +70,6 @@ def _reemplazar_parrafo(parrafo, variables: dict):
             pos_rpr.append(rpr)
 
     # ── Construir lista de segmentos (texto, rpr) ─────────────────────────────
-    # Dividimos el texto completo en segmentos respetando los marcadores.
-    # Cada segmento tendrá el rPr correspondiente a su posición original.
     segmentos = []  # lista de (texto_final, rpr)
 
     cursor = 0
@@ -112,10 +110,6 @@ def _reemplazar_parrafo(parrafo, variables: dict):
 
 
 def _agregar_segmentos_con_formato(segmentos: list, texto: str, pos_rpr: list):
-    """
-    Agrupa caracteres consecutivos con el mismo rPr en un solo segmento.
-    Así no creamos un run por cada carácter, sino uno por cada bloque de formato igual.
-    """
     if not texto:
         return
 
@@ -124,7 +118,6 @@ def _agregar_segmentos_con_formato(segmentos: list, texto: str, pos_rpr: list):
 
     for i, char in enumerate(texto):
         rpr_char = pos_rpr[i] if i < len(pos_rpr) else None
-        # Comparamos el XML serializado para detectar cambio de formato
         if _rpr_igual(rpr_char, rpr_actual):
             buf += char
         else:
@@ -138,7 +131,6 @@ def _agregar_segmentos_con_formato(segmentos: list, texto: str, pos_rpr: list):
 
 
 def _rpr_igual(a, b) -> bool:
-    """Compara dos rPr por su XML serializado."""
     if a is None and b is None:
         return True
     if a is None or b is None:
@@ -157,8 +149,21 @@ def _reemplazar_xml(xml_bytes: bytes, variables: dict) -> bytes:
 
 
 def _sanitizar(texto: str) -> str:
-    """Elimina caracteres inválidos para nombres de archivo."""
     return re.sub(r'[\\/*?:"<>|]', "", texto).strip()
+
+
+def _proceso_drive_background(ruta_docx: Path, contrato, fecha):
+    """Procesamiento en segundo plano para evitar bloquear la API."""
+    try:
+        proyecto_nombre = contrato.proyecto.nombre if contrato.proyecto else "Proyecto"
+        # La conversión y subida toman tiempo, pero ahora ocurren aisladas
+        ruta_pdf = _convertir_a_pdf(ruta_docx)
+        
+        from app.services.drive_service import subir_a_drive
+        subir_a_drive(ruta_pdf, proyecto_nombre, fecha)
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Proceso asíncrono de Drive/PDF falló: {e}")
 
 
 def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> Path:
@@ -167,10 +172,8 @@ def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> 
         raise FileNotFoundError(f"Template no encontrado: {template_path}")
 
     variables = compilar_variables(contrato, lote, distrito1, distrito2)
-
     fecha = contrato.fecha
 
-    # Nombre: MZA-LT3_Proyecto_2026-03-13.docx
     manzana       = _sanitizar(lote.manzana)
     lote_num      = _sanitizar(lote.numero)
     proyecto_nom  = _sanitizar(contrato.proyecto.nombre) if contrato.proyecto else "Proyecto"
@@ -201,26 +204,18 @@ def generar_minuta(contrato, lote, template, distrito1=None, distrito2=None) -> 
             zout.writestr(nombre, data)
     Path(tmp).replace(ruta_salida)
 
-    # ── Subir a Drive en PDF (no bloquea si falla) ────────────────────────────
-    try:
-        from app.services.drive_service import subir_a_drive
-        proyecto_nombre = contrato.proyecto.nombre if contrato.proyecto else "Proyecto"
-        ruta_pdf = _convertir_a_pdf(ruta_salida)
-        subir_a_drive(ruta_pdf, proyecto_nombre, fecha)
-    except Exception as e:
-        # El archivo local (Word) igual se retorna aunque Drive falle
-        import logging
-        logging.getLogger(__name__).warning(f"Drive upload falló: {e}")
+    # ── SOLUCIÓN: Despachar a un hilo de ejecución independiente ────────────────
+    hilo = threading.Thread(
+        target=_proceso_drive_background,
+        args=(ruta_salida, contrato, fecha),
+        daemon=True
+    )
+    hilo.start()
 
-    return ruta_salida  # El usuario siempre recibe el .docx
+    return ruta_salida  # Retorno inmediato del archivo Word local al usuario
 
 
 def _convertir_a_pdf(ruta_docx: Path) -> Path:
-    """
-    Convierte un .docx a .pdf usando LibreOffice headless.
-    Retorna la ruta del PDF generado (misma carpeta que el docx).
-    Requiere LibreOffice instalado en el servidor (Railway/Linux).
-    """
     import subprocess
     resultado = subprocess.run(
         [

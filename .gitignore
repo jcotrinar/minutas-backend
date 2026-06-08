@@ -26,3 +26,5 @@ minutas_generadas/
 # OS
 .DS_Store
 Thumbs.db
+token.json
+oauth_credentials.json
