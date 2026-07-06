@@ -147,6 +147,11 @@ def comprador_texto(genero: str, tiene_coprop: bool = False) -> str:
         return "LOS COMPRADORES"
     return "LA COMPRADORA" if genero.upper() == "F" else "EL COMPRADOR"
 
+def p_comprador_texto(genero: str, tiene_coprop: bool = False) -> str:
+    if tiene_coprop:
+        return "LOS PROMITENTES COMPRADORES"
+    return "LA PROMITENTE COMPRADORA" if genero.upper() == "F" else "EL PROMITENTE COMPRADOR"
+
 def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     moneda      = contrato.moneda
     precio      = contrato.precio      or 0.0
@@ -202,6 +207,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "DIRECCION":         (contrato.direccion1 or "").upper(),
         "UBIGEO":            ubigeo1,
         "COPROP":            (contrato.copropietario or "").upper(),
+        "P_COPROP":          (contrato.copropietario or "").upper(),
         "DNI2":              contrato.dni2 or "",
         "IDENT2":            identificado_texto(contrato.genero2 or "M") if tiene_coprop else "",
         "ESTADO_CIVIL2":     estado_civil_texto(contrato.estado_civil2 or "S", contrato.genero2 or "M") if tiene_coprop else "",
@@ -209,6 +215,7 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "DIRECCION2":        (contrato.direccion2 or "").upper(),
         "UBIGEO2":           ubigeo2,
         "COMPRADOR":         comprador_texto(contrato.genero1 or "M", tiene_coprop),
+        "P_COMPRADOR":       p_comprador_texto(contrato.genero1 or "M", tiene_coprop),
         "PRECIO":            fmt(precio),
         "PRECIO_TEXTO":      numero_a_letras(precio, moneda),
         "PRECIO_DECIMAL":    decimal_str(precio),
