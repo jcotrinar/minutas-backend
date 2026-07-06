@@ -96,6 +96,16 @@ def area_a_letras(area: float) -> str:
         r += " PUNTO " + " ".join(digitos)
     return r
 
+def porcentaje_a_letras(porcentaje: float) -> str:
+    porcentaje     = round(porcentaje, 4)
+    entero         = int(porcentaje)
+    parte_decimal  = f"{porcentaje:.4f}".split(".")[1]
+    r = _entero_a_letras(entero).upper()
+    if parte_decimal != "0000":
+        digitos = [_entero_a_letras(int(d)).upper() for d in parte_decimal]
+        r += " PUNTO " + " ".join(digitos)
+    return r
+
 def decimal_str(monto: float) -> str:
     return f"{round((monto - int(monto)) * 100):02d}"
 
@@ -166,6 +176,14 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
     entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
 
+    # Porcentaje del lote respecto al predio matriz (area_predio en hectáreas)
+    area_predio_ha = getattr(lote, 'area_predio', None)
+    porcentaje = None
+    if area_predio_ha:
+        area_predio_m2 = area_predio_ha * 10000
+        if area_predio_m2 > 0:
+            porcentaje = round((lote.area / area_predio_m2) * 100, 4)
+
 
 
     return {
@@ -213,6 +231,8 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         "ENTREGA":             str(entrega_num) if entrega_num else "",
         "ENTREGA_TEXTO":       entrega_txt_calc,
         "MODALIDAD_ENTREGA":   (getattr(contrato.proyecto, "entrega_texto", None) or "").upper(),
+        "PORCENTAJE":          f"{porcentaje:.4f}" if porcentaje is not None else "",
+        "PORCENTAJE_TEXTO":    porcentaje_a_letras(porcentaje) if porcentaje is not None else "",
         "PLAZO":             str(plazo_num) if plazo_num else "",
         "PLAZO_TEXTO":       plazo_txt,
     }

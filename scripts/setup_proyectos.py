@@ -43,6 +43,17 @@ PROYECTOS = [
             ColorSemaforo.ROJO:     "laureles/ROJO.docx",
         }
     },
+    {
+        "nombre": "Residencial Prada",
+        "descripcion": "Residencial Prada",
+        "moneda": Moneda.SOLES,
+        "templates": {
+            ColorSemaforo.VERDE:    "prada/VERDE.docx",
+            ColorSemaforo.AMARILLO: "prada/AMARILLO.docx",
+            ColorSemaforo.AZUL:     "prada/AZUL.docx",
+            ColorSemaforo.ROJO:     "prada/ROJO.docx",
+        }
+    },
 ]
 
 def main():
