@@ -11,3 +11,4 @@ google-auth-oauthlib==1.2.0
 google-api-python-client==2.129.0
 psycopg2-binary==2.9.9    # Para PostgreSQL/Supabase en producción
 alembic==1.13.1            # Migraciones de BD
+requests==2.32.3           # Consulta RENIEC/SUNAT vía apis.net.pe

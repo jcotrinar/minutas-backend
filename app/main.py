@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app import models
-from app.routers import contratos, lotes, distritos, minutas, proyectos
+from app.routers import contratos, lotes, distritos, minutas, proyectos, reniec
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -25,6 +25,7 @@ app.include_router(contratos.router, prefix="/contratos", tags=["Contratos"])
 app.include_router(lotes.router,     prefix="/lotes",     tags=["Lotes"])
 app.include_router(distritos.router, prefix="/distritos", tags=["Distritos"])
 app.include_router(minutas.router,   prefix="/minutas",   tags=["Minutas"])
+app.include_router(reniec.router,    prefix="/reniec",    tags=["Reniec"])
 
 @app.get("/")
 def root():
