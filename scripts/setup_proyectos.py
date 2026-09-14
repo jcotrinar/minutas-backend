@@ -54,6 +54,17 @@ PROYECTOS = [
             ColorSemaforo.ROJO:     "prada/ROJO.docx",
         }
     },
+    {
+        "nombre": "Residencial Prada II",
+        "descripcion": "Prada Residencial II - Valle Chao, Virú",
+        "moneda": Moneda.SOLES,
+        "templates": {
+            ColorSemaforo.VERDE:    "prada2/VERDE.docx",
+            ColorSemaforo.AMARILLO: "prada2/AMARILLO.docx",
+            ColorSemaforo.AZUL:     "prada2/AZUL.docx",
+            ColorSemaforo.ROJO:     "prada2/ROJO.docx",
+        }
+    },
 ]
 
 def main():

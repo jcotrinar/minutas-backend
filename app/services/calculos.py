@@ -177,9 +177,13 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     plazo_num  = contrato.plazo_meses or 0
     plazo_txt  = plazo_a_texto(plazo_num) if plazo_num else ""
 
-    # Plazo de entrega dinámico
-    fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
-    entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
+    # Plazo de entrega: fijo del lote (Prada II, según etapa) o dinámico según la fecha límite del proyecto
+    plazo_entrega_lote = getattr(lote, 'plazo_entrega', None)
+    if plazo_entrega_lote:
+        entrega_num, entrega_txt_calc = plazo_entrega_lote, _entero_a_letras(plazo_entrega_lote).upper()
+    else:
+        fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
+        entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
 
     # Porcentaje del lote respecto al predio matriz (area_predio en hectáreas)
     area_predio_ha = getattr(lote, 'area_predio', None)
@@ -189,11 +193,15 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         if area_predio_m2 > 0:
             porcentaje = round((lote.area / area_predio_m2) * 100, 4)
 
-
+    # Proyectos por etapas (Prada II): la manzana se guarda con sufijo "-2"/"-3" para no repetirse
+    # entre etapas, pero en la minuta va sin sufijo porque la etapa se indica con «ETAPA»
+    etapa   = getattr(lote, 'etapa', None)
+    manzana = lote.manzana.rsplit("-", 1)[0] if etapa else lote.manzana
 
     return {
         "FECHA":             fecha_a_texto(contrato.fecha),
-        "MZ":                lote.manzana,
+        "MZ":                manzana,
+        "ETAPA":             etapa or "",
         "LOTE":              str(lote.numero),
         "AREA":              f"{lote.area:.2f}",
         "AREA_TEXTO":        area_a_letras(lote.area),
