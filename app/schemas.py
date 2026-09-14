@@ -29,6 +29,7 @@ class LoteOut(BaseModel):
     partida:       Optional[str]
     nombre_predio: Optional[str]
     area_predio:   Optional[float]
+    etapa:         Optional[str] = None
     class Config: from_attributes = True
 
 

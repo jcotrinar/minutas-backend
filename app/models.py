@@ -54,6 +54,7 @@ class Lote(Base):
     partida       = Column(String(20))
     nombre_predio = Column(String(300))
     area_predio   = Column(Float, nullable=True)  # área del predio matriz, en hectáreas
+    etapa         = Column(String(20), nullable=True)  # PRIMERA / SEGUNDA / TERCERA (proyectos por etapas)
 
     proyecto  = relationship("Proyecto", back_populates="lotes")
     contratos = relationship("Contrato", back_populates="lote")

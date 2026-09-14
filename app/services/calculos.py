@@ -189,11 +189,15 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
         if area_predio_m2 > 0:
             porcentaje = round((lote.area / area_predio_m2) * 100, 4)
 
-
+    # Proyectos por etapas (Prada II): la manzana se guarda con sufijo "-2"/"-3" para no repetirse
+    # entre etapas, pero en la minuta va sin sufijo porque la etapa se indica con «ETAPA»
+    etapa   = getattr(lote, 'etapa', None)
+    manzana = lote.manzana.rsplit("-", 1)[0] if etapa else lote.manzana
 
     return {
         "FECHA":             fecha_a_texto(contrato.fecha),
-        "MZ":                lote.manzana,
+        "MZ":                manzana,
+        "ETAPA":             etapa or "",
         "LOTE":              str(lote.numero),
         "AREA":              f"{lote.area:.2f}",
         "AREA_TEXTO":        area_a_letras(lote.area),
