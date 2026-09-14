@@ -177,9 +177,13 @@ def compilar_variables(contrato, lote, distrito1=None, distrito2=None) -> dict:
     plazo_num  = contrato.plazo_meses or 0
     plazo_txt  = plazo_a_texto(plazo_num) if plazo_num else ""
 
-    # Plazo de entrega dinámico
-    fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
-    entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
+    # Plazo de entrega: fijo del lote (Prada II, según etapa) o dinámico según la fecha límite del proyecto
+    plazo_entrega_lote = getattr(lote, 'plazo_entrega', None)
+    if plazo_entrega_lote:
+        entrega_num, entrega_txt_calc = plazo_entrega_lote, _entero_a_letras(plazo_entrega_lote).upper()
+    else:
+        fecha_limite = getattr(contrato.proyecto, 'fecha_limite_entrega', None) if hasattr(contrato, 'proyecto') and contrato.proyecto else None
+        entrega_num, entrega_txt_calc = plazo_entrega_texto(contrato.fecha, fecha_limite)
 
     # Porcentaje del lote respecto al predio matriz (area_predio en hectáreas)
     area_predio_ha = getattr(lote, 'area_predio', None)

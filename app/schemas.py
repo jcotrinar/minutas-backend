@@ -30,6 +30,7 @@ class LoteOut(BaseModel):
     nombre_predio: Optional[str]
     area_predio:   Optional[float]
     etapa:         Optional[str] = None
+    plazo_entrega: Optional[int] = None
     class Config: from_attributes = True
 
 
