@@ -122,7 +122,7 @@ def fecha_a_texto(d: date) -> str:
     return f"{d.day:02d} DE {MESES[d.month]} DEL {d.year}"
 
 def plazo_a_texto(meses: int) -> str:
-    return f"{_entero_a_letras(meses).upper()} ({meses}) MESES"
+    return f"{_entero_a_letras(meses).upper()}"
 
 
 def plazo_entrega_texto(fecha_contrato, fecha_limite_entrega) -> tuple:
